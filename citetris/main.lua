@@ -6,7 +6,7 @@ function Tile:new(id)
     o.id = id
     o.w = 100
     o.h = 100
-    o.xPos = 10
+    o.xPos = 210
     o.yPos = 0
     o.rotation = 0
     o.active = true
@@ -83,6 +83,33 @@ end
 function Tile:die()
     self.active = false
     table.insert(deadTiles, self)
+
+    -- update slotRestrictions
+    si = posToSlotIndex(self.xPos, self.yPos)
+    i = si['i']
+    j = si['j']
+    -- self
+    slotRestrictions[i][j] = 'xxx'
+    -- left neighbour
+    if i > 1 and not slotRestrictions[i-1][j] == 'xxx' then
+        pre = slotRestrictions[i-1][j]
+        ins = tileEdges[self.id]:sub(1,1)
+        slotRestrictions[i-1][j] = pre:sub(1,2) .. ins
+    end
+    -- right neighbour
+    if i < 5 and not slotRestrictions[i+1][j] == 'xxx' then
+        pre = slotRestrictions[i+1][j]
+        ins = tileEdges[self.id]:sub(3,3)
+        slotRestrictions[i+1][j] = ins .. pre:sub(2,3)
+    end
+    -- top neighbour
+    if j < 8 then
+        pre = slotRestrictions[i][j+1]
+        ins = tileEdges[self.id]:sub(4,4)
+        slotRestrictions[i][j+1] = pre:sub(1,1) .. ins .. pre:sub(3,3)
+    end
+    printSlotRestrictions()
+
     spawnNewTile()
 end
 
@@ -103,16 +130,65 @@ function resetInterval()
 end
 
 function spawnNewTile()
-    activeTile = Tile:new('w')
+    activeTile = Tile:new(tileIDs[math.random(19)])
 end
 
--- ### globals
+function posToSlotIndex(x, y)
+    ret = {}
+    ret['i'] = ((x - 10) / 100) + 1
+    ret['j'] = ((700 - y) / 100) + 1
+    return ret
+end
+
+function printSlotRestrictions()
+    print('')
+    for j = 1, 8 do
+        s = ''
+        for i = 1, 5 do
+            s = s .. '[' .. slotRestrictions[i][9-j] .. '] '
+        end
+        print(s)
+    print('')
+    end
+    print('')
+end
+
+-- ### global
+math.randomseed(os.time())
+
 tileImgs = {}
-activeTile = Tile:new('d')
+tileIDs = {'a', 'b', 'c', 'd', 'e', 'fg', 'h', 'i', 'j', 'k', 'l', 'mn', 'op',
+           'qr', 'st', 'u', 'v', 'w', 'x'}
+tileEdges = {a ='gggg',
+             b ='grgg',
+             c ='cccc',
+             d ='rcrc',
+             e ='gggc',
+             fg='cgcg',
+             h ='gcgc',
+             i ='ggcc',
+             j ='grrc',
+             k ='rrgc',
+             l ='rrrc',
+             mn='ggcc',
+             op='rrcc',
+             qr='cgcc',
+             st='crcc',
+             u ='rgrg',
+             v ='rrgg',
+             w ='rrrg',
+             x ='rrrr'}
 deadTiles = {}
+slotRestrictions = {}
+for i = 1, 5 do
+    slotRestrictions[i] = {}
+    for j = 1, 8 do
+        slotRestrictions[i][j] = '---'
+    end
+end
 speed = 1
-interval = 0
--- ### /globals
+interval = resetInterval()
+-- ### /global
 
 -- ### callback functions
 
@@ -122,8 +198,6 @@ function love.load()
     bg = love.graphics.newImage('assets/bg.png')
 
     -- load tile imgs
-    tileIDs = {'a', 'b', 'c', 'd', 'e', 'fg', 'h', 'i', 'j', 'k', 'l', 'mn',
-               'op', 'qr', 'st', 'u', 'v', 'w', 'x'}
     for i = 1, 19 do
         id = tileIDs[i]
         tileImgs[id] = love.graphics.newImage('assets/tile_' .. id .. '.png')
@@ -131,6 +205,8 @@ function love.load()
 
     -- game setup
     interval = resetInterval()
+
+    spawnNewTile()
 end
 
 function love.update(dt)
