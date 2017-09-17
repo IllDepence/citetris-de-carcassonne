@@ -95,10 +95,21 @@ function Tile:die()
         return
     end
 
-
     -- check placement validity
     srl = getSlotRestrictionList()
     restr = srl[self.i]
+
+    if restr == nil then
+        -- there was a strange case once where restr was nil
+        print('!!! ------- !!!')
+        print('self.i: ' .. self.i)
+        print('srl:')
+        for k, val in srl do
+            print(k .. ': ' .. val)
+        end
+        print('!!! ------- !!!')
+    end
+
     edges = self:getEdges()
     valid = true
     for i = 1, 3 do
@@ -119,9 +130,52 @@ function Tile:die()
 
     -- increase score
     score = score + speed
+    score = score + monasteryPoints(self)
+    score = score + roadPoints(self)
+    score = score + cityPoints(self)
 
     clearRows()
     spawnNewTile()
+end
+
+function monasteryPoints(tile)
+    points = 0
+    for d = -1, 1 do
+        col = deadTilesGrid[tile.i + d]
+        if col ~= nil then
+            sth = col[tile.j - 1]
+            if sth ~= nil and (sth.id == 'a' or sth.id == 'b') then
+                -- there's a monastery that we might've just completed
+                comp = true
+                for colDelta = -1, 1 do
+                    for rowDelta = -1, 1 do
+                        innerCol = deadTilesGrid[sth.i + colDelta]
+                        if innerCol ~= nil then
+                            if innerCol[sth.j + rowDelta] == nil then
+                                comp = false
+                            end
+                        else
+                            comp = false
+                        end
+                    end
+                end
+                -- monastery is completed
+                if comp then
+                    print('Klosterpunkte :)')
+                    points = 9
+                end
+            end
+        end
+    end
+    return points
+end
+
+function roadPoints(tile)
+    return 0
+end
+
+function cityPoints(tile)
+    return 0
 end
 
 function clearRows()
@@ -269,6 +323,7 @@ function love.load()
     love.window.setMode(600, 810, {})
     latoFont24 = love.graphics.newFont('assets/Lato-Light.ttf', 24)
     bg = love.graphics.newImage('assets/bg.png')
+    pause = love.graphics.newImage('assets/pause.png')
     game_over = love.graphics.newImage('assets/game_over.png')
 
     -- load tile imgs
@@ -312,23 +367,28 @@ function love.draw()
     love.graphics.print(string.format('%05d', speed), 516, 147)
     love.graphics.setColor(255, 255, 255, 255)
 
+    if gameState == 'paused' then
+        love.graphics.draw(pause, 0, 0)
+    end
     if gameState == 'over' then
         love.graphics.draw(game_over, 0, 0)
     end
 end
 
 function love.keypressed(key, scancode)
-    if scancode ~= nil and gameState == 'running' then
-        if scancode == 'up' then
-            activeTile:rotate()
-        elseif scancode == 'down' then
-            activeTile:goDown()
-        elseif scancode == 'right' then
-            activeTile:goRight()
-        elseif scancode == 'left' then
-            activeTile:goLeft()
-        elseif scancode == 'space' then
-            activeTile:goBottom()
+    if scancode ~= nil then
+        if gameState == 'running' then
+            if scancode == 'up' then
+                activeTile:rotate()
+            elseif scancode == 'down' then
+                activeTile:goDown()
+            elseif scancode == 'right' then
+                activeTile:goRight()
+            elseif scancode == 'left' then
+                activeTile:goLeft()
+            elseif scancode == 'space' then
+                activeTile:goBottom()
+            end
         end
         if scancode == 'p' then
             if gameState == 'running' then
@@ -336,6 +396,14 @@ function love.keypressed(key, scancode)
             elseif gameState == 'paused' then
                 gameState = 'running'
             end
+        end
+        if scancode == 'd' then
+            srl = getSlotRestrictionList()
+            s = ''
+            for k, restr in pairs(srl) do
+                s = s .. '[' .. restr .. '] '
+            end
+            print(s)
         end
     end
 end
