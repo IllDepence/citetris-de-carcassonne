@@ -81,36 +81,77 @@ function Tile:goBottom()
 end
 
 function Tile:die()
+    if self.xPos == 210 and self.yPos == 0 then
+        gameState = 'over'
+        return
+    end
+
     self.active = false
     table.insert(deadTiles, self)
 
-    -- update slotRestrictions
     si = posToSlotIndex(self.xPos, self.yPos)
     i = si['i']
     j = si['j']
+
+    -- check placement validity
+    srl = getSlotRestrictionList()
+    restr = srl[i]
+    edges = tileEdges[self.id] -- non rotated full edges
+    round = edges .. edges:sub(1,3) -- allow offset indexing
+    rot = self.rotation
+    actualEdges = round:sub(1+rot, 4+rot) -- actual edges w/o top
+    valid = true
+    for i = 1, 3 do
+        if not (restr:sub(i,i) == '-') then
+            if not (restr:sub(i,i) == actualEdges:sub(i,i)) then
+                valid = false
+            end
+        end
+    end
+    if valid then
+        -- check for complete row
+    else
+        gameState = 'over'
+        return
+    end
+
+    -- update slotRestrictions
     -- self
     slotRestrictions[i][j] = 'xxx'
     -- left neighbour
-    if i > 1 and not slotRestrictions[i-1][j] == 'xxx' then
+    if i > 1 and not (slotRestrictions[i-1][j] == 'xxx') then
         pre = slotRestrictions[i-1][j]
-        ins = tileEdges[self.id]:sub(1,1)
+        ins = actualEdges:sub(1,1)
         slotRestrictions[i-1][j] = pre:sub(1,2) .. ins
     end
     -- right neighbour
-    if i < 5 and not slotRestrictions[i+1][j] == 'xxx' then
+    if i < 5 and not (slotRestrictions[i+1][j] == 'xxx') then
         pre = slotRestrictions[i+1][j]
-        ins = tileEdges[self.id]:sub(3,3)
+        ins = actualEdges:sub(3,3)
         slotRestrictions[i+1][j] = ins .. pre:sub(2,3)
     end
     -- top neighbour
     if j < 8 then
         pre = slotRestrictions[i][j+1]
-        ins = tileEdges[self.id]:sub(4,4)
+        ins = actualEdges:sub(4,4)
         slotRestrictions[i][j+1] = pre:sub(1,1) .. ins .. pre:sub(3,3)
     end
-    printSlotRestrictions()
-
+    -- printSlotRestrictions()
     spawnNewTile()
+end
+
+function getSlotRestrictionList()
+    ret = {}
+    for i = 1, 5 do
+        done = false
+        for j = 1, 8 do
+            if not (slotRestrictions[i][j] == 'xxx')  and not done then
+                table.insert(ret, slotRestrictions[i][j])
+                done = true
+            end
+        end
+    end
+    return ret
 end
 
 function isTaken(x, y)
@@ -129,8 +170,24 @@ function resetInterval()
     return 1/speed
 end
 
-function spawnNewTile()
-    activeTile = Tile:new(tileIDs[math.random(19)])
+function spawnNewTile(srl)
+    srl = getSlotRestrictionList()
+    placeableTileIDs = {}
+    for k, edges in pairs(tileEdges) do
+        placeable = false
+        check = edges .. edges:sub(1,2)
+        for l, restr in pairs(srl) do
+            if not placeable then
+                restr = string.gsub(restr, '-', '')
+                if string.match(check, restr) then
+                    table.insert(placeableTileIDs, k)
+                    placeable = true
+                end
+            end
+        end
+    end
+    lim = table.getn(placeableTileIDs)
+    activeTile = Tile:new(placeableTileIDs[math.random(lim)])
 end
 
 function posToSlotIndex(x, y)
@@ -156,6 +213,7 @@ end
 -- ### global
 math.randomseed(os.time())
 
+gameState = 'running'
 tileImgs = {}
 tileIDs = {'a', 'b', 'c', 'd', 'e', 'fg', 'h', 'i', 'j', 'k', 'l', 'mn', 'op',
            'qr', 'st', 'u', 'v', 'w', 'x'}
@@ -193,9 +251,10 @@ interval = resetInterval()
 -- ### callback functions
 
 function love.load()
-    love.window.setTitle("Citétris de Carcassonne")
+    love.window.setTitle('Citétris de Carcassonne')
     love.window.setMode(600, 810, {})
     bg = love.graphics.newImage('assets/bg.png')
+    game_over = love.graphics.newImage('assets/game_over.png')
 
     -- load tile imgs
     for i = 1, 19 do
@@ -210,10 +269,12 @@ function love.load()
 end
 
 function love.update(dt)
-    interval = interval - dt
-    if interval <= 0 then
-        activeTile:goDown()
-        interval = resetInterval()
+    if gameState == 'running' then
+        interval = interval - dt
+        if interval <= 0 then
+            activeTile:goDown()
+            interval = resetInterval()
+        end
     end
 end
 
@@ -223,20 +284,27 @@ function love.draw()
     for k, tile in pairs(deadTiles) do
         tile:draw()
     end
+    if gameState == 'over' then
+        love.graphics.draw(game_over, 0, 0)
+    end
 end
 
 function love.keypressed(key, scancode)
     if scancode ~= nil then
-        if scancode == "up" then
+        if scancode == 'up' then
             activeTile:rotate()
-        elseif scancode == "down" then
+        elseif scancode == 'down' then
             activeTile:goDown()
-        elseif scancode == "right" then
+        elseif scancode == 'right' then
             activeTile:goRight()
-        elseif scancode == "left" then
+        elseif scancode == 'left' then
             activeTile:goLeft()
-        elseif scancode == "space" then
+        elseif scancode == 'space' then
             activeTile:goBottom()
+        elseif scancode == 'p' then
+            if gameState == 'running' then
+                gameState = 'paused'
+            end
         end
     end
 end
