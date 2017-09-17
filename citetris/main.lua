@@ -88,6 +88,7 @@ function Tile:die()
 
     self.active = false
     table.insert(deadTiles, self)
+    score = score + speed
 
     si = posToSlotIndex(self.xPos, self.yPos)
     i = si['i']
@@ -108,9 +109,7 @@ function Tile:die()
             end
         end
     end
-    if valid then
-        -- check for complete row
-    else
+    if not valid then
         gameState = 'over'
         return
     end
@@ -137,7 +136,33 @@ function Tile:die()
         slotRestrictions[i][j+1] = pre:sub(1,1) .. ins .. pre:sub(3,3)
     end
     -- printSlotRestrictions()
+
+    clearRows()
     spawnNewTile()
+end
+
+function clearRows()
+    rowDone = true
+    for i = 1, 5 do
+        if not (slotRestrictions[i][2] == 'xxx') then
+            rowDone = false
+        end
+    end
+    if rowDone then
+        score = 10 * speed
+        for i = 1, 5 do
+            table.remove(slotRestrictions[i], 1)
+            slotRestrictions[i][8] = '---'
+        end
+        newDeadTiles = {}
+        for k, tile in pairs(deadTiles) do
+            if not(tile.yPos == 700) then
+                tile.yPos = tile.yPos + 100
+                table.insert(newDeadTiles, tile)
+            end
+            deadTiles = newDeadTiles
+        end
+    end
 end
 
 function getSlotRestrictionList()
@@ -220,7 +245,7 @@ tileIDs = {'a', 'b', 'c', 'd', 'e', 'fg', 'h', 'i', 'j', 'k', 'l', 'mn', 'op',
 tileEdges = {a ='gggg',
              b ='grgg',
              c ='cccc',
-             d ='rcrc',
+             d ='rgrc',
              e ='gggc',
              fg='cgcg',
              h ='gcgc',
@@ -246,6 +271,7 @@ for i = 1, 5 do
 end
 speed = 1
 interval = resetInterval()
+score = 0
 -- ### /global
 
 -- ### callback functions
@@ -253,6 +279,7 @@ interval = resetInterval()
 function love.load()
     love.window.setTitle('Citétris de Carcassonne')
     love.window.setMode(600, 810, {})
+    latoFont24 = love.graphics.newFont('assets/Lato-Light.ttf', 24)
     bg = love.graphics.newImage('assets/bg.png')
     game_over = love.graphics.newImage('assets/game_over.png')
 
@@ -279,11 +306,20 @@ function love.update(dt)
 end
 
 function love.draw()
+    love.graphics.setFont(latoFont24)
     love.graphics.draw(bg, 0, 0)
     activeTile:draw()
     for k, tile in pairs(deadTiles) do
         tile:draw()
     end
+
+    love.graphics.setColor(85, 34, 0, 255)
+    love.graphics.print('SCORE', 516, 50)
+    love.graphics.print(string.format('%05d', score), 516, 77)
+    love.graphics.print('SPEED', 516, 120)
+    love.graphics.print(string.format('%05d', speed), 516, 147)
+    love.graphics.setColor(255, 255, 255, 255)
+
     if gameState == 'over' then
         love.graphics.draw(game_over, 0, 0)
     end
