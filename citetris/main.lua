@@ -31,20 +31,30 @@ function Tile:draw()
     love.graphics.draw(img, x, y, rot)
 end
 
-function Tile:minX()
-    return self.xPos
+function Tile:getEdges()
+    raw = tileEdges[self.id] -- non rotated
+    ext = raw .. raw:sub(1,3) -- allow for offset indexing
+    return ext:sub(1+self.rotation, 4+self.rotation) -- actual edges lbrt
 end
 
-function Tile:maxX()
-    return self.xPos + self.w
+function Tile:getLeft()
+    edges = self:getEdges()
+    return edges:sub(1,1)
 end
 
-function Tile:minY()
-    return self.yPos
+function Tile:getBottom()
+    edges = self:getEdges()
+    return edges:sub(2,2)
 end
 
-function Tile:maxY()
-    return self.yPos + self.h
+function Tile:getRight()
+    edges = self:getEdges()
+    return edges:sub(3,3)
+end
+
+function Tile:getTop()
+    edges = self:getEdges()
+    return edges:sub(4,4)
 end
 
 function Tile:rotate()
@@ -86,25 +96,21 @@ function Tile:die()
         return
     end
 
-    self.active = false
-    table.insert(deadTiles, self)
-    score = score + speed
-
     si = posToSlotIndex(self.xPos, self.yPos)
     i = si['i']
     j = si['j']
 
+    self.active = false
+    deadTilesGrid[i][j] = self
+
     -- check placement validity
     srl = getSlotRestrictionList()
     restr = srl[i]
-    edges = tileEdges[self.id] -- non rotated full edges
-    round = edges .. edges:sub(1,3) -- allow offset indexing
-    rot = self.rotation
-    actualEdges = round:sub(1+rot, 4+rot) -- actual edges w/o top
+    edges = self:getEdges()
     valid = true
     for i = 1, 3 do
         if not (restr:sub(i,i) == '-') then
-            if not (restr:sub(i,i) == actualEdges:sub(i,i)) then
+            if not (restr:sub(i,i) == edges:sub(i,i)) then
                 valid = false
             end
         end
@@ -114,25 +120,28 @@ function Tile:die()
         return
     end
 
+    -- increase score
+    score = score + speed
+
     -- update slotRestrictions
     -- self
     slotRestrictions[i][j] = 'xxx'
     -- left neighbour
     if i > 1 and not (slotRestrictions[i-1][j] == 'xxx') then
         pre = slotRestrictions[i-1][j]
-        ins = actualEdges:sub(1,1)
+        ins = edges:sub(1,1)
         slotRestrictions[i-1][j] = pre:sub(1,2) .. ins
     end
     -- right neighbour
     if i < 5 and not (slotRestrictions[i+1][j] == 'xxx') then
         pre = slotRestrictions[i+1][j]
-        ins = actualEdges:sub(3,3)
+        ins = edges:sub(3,3)
         slotRestrictions[i+1][j] = ins .. pre:sub(2,3)
     end
     -- top neighbour
     if j < 8 then
         pre = slotRestrictions[i][j+1]
-        ins = actualEdges:sub(4,4)
+        ins = edges:sub(4,4)
         slotRestrictions[i][j+1] = pre:sub(1,1) .. ins .. pre:sub(3,3)
     end
     -- printSlotRestrictions()
@@ -149,18 +158,18 @@ function clearRows()
         end
     end
     if rowDone then
-        score = 10 * speed
+        score = score + (10 * speed)
         for i = 1, 5 do
-            table.remove(slotRestrictions[i], 1)
-            slotRestrictions[i][8] = '---'
-        end
-        newDeadTiles = {}
-        for k, tile in pairs(deadTiles) do
-            if not(tile.yPos == 700) then
-                tile.yPos = tile.yPos + 100
-                table.insert(newDeadTiles, tile)
+            for j = 2, 8 do
+                tile = deadTilesGrid[i][j]
+                if not (tile == nil) then
+                    tile.yPos = tile.yPos + 100
+                end
             end
-            deadTiles = newDeadTiles
+            table.remove(slotRestrictions[i], 1)
+            table.remove(deadTilesGrid[i], 1)
+            slotRestrictions[i][8] = '---'
+            deadTilesGrid[i][8] = nil
         end
     end
 end
@@ -183,9 +192,14 @@ function isTaken(x, y)
     if x < 10 or x > 410 or y > 700 then
         return true
     end
-    for k, tile in pairs(deadTiles) do
-        if tile.xPos == x and tile.yPos == y then
-            return true
+    for i = 1, 5 do
+        for j = 1, 8 do
+            tile = deadTilesGrid[i][j]
+            if not (tile == nil) then
+                if tile.xPos == x and tile.yPos == y then
+                    return true
+                end
+            end
         end
     end
     return false
@@ -261,11 +275,13 @@ tileEdges = {a ='gggg',
              v ='rrgg',
              w ='rrrg',
              x ='rrrr'}
-deadTiles = {}
+deadTilesGrid = {}
 slotRestrictions = {}
 for i = 1, 5 do
+    deadTilesGrid[i] = {}
     slotRestrictions[i] = {}
     for j = 1, 8 do
+        deadTilesGrid[i][j] = nil
         slotRestrictions[i][j] = '---'
     end
 end
@@ -309,8 +325,12 @@ function love.draw()
     love.graphics.setFont(latoFont24)
     love.graphics.draw(bg, 0, 0)
     activeTile:draw()
-    for k, tile in pairs(deadTiles) do
-        tile:draw()
+    for i = 1, 5 do
+        for j = 1, 8 do
+            if not (deadTilesGrid[i][j] == nil) then
+                deadTilesGrid[i][j]:draw()
+            end
+        end
     end
 
     love.graphics.setColor(85, 34, 0, 255)
