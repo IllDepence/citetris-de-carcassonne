@@ -4,10 +4,8 @@ function Tile:new(id)
     o = {}
     setmetatable(o, {__index = Tile})
     o.id = id
-    o.w = 100
-    o.h = 100
-    o.xPos = 210
-    o.yPos = 0
+    o.i = 3
+    o.j = 8
     o.rotation = 0
     o.active = true
     return o
@@ -15,8 +13,9 @@ end
 
 function Tile:draw()
     img = tileImgs[self.id]
-    x = self.xPos
-    y = self.yPos
+    pixelPos = gridToPixelPos(self.i, self.j)
+    x = pixelPos['x']
+    y = pixelPos['y']
     rot = math.rad(90 * self.rotation)
     if self.rotation == 1 then
         x = x + 100
@@ -62,8 +61,8 @@ function Tile:rotate()
 end
 
 function Tile:goDown()
-    if not isTaken(self.xPos, self.yPos + 100) then
-        self.yPos = self.yPos + 100
+    if not isTaken(self.i, self.j - 1) then
+        self.j = self.j - 1
         return true
     else
         self:die()
@@ -72,14 +71,14 @@ function Tile:goDown()
 end
 
 function Tile:goRight()
-    if not isTaken(self.xPos + 100, self.yPos) then
-        self.xPos = self.xPos + 100
+    if not isTaken(self.i + 1, self.j) then
+        self.i = self.i + 1
     end
 end
 
 function Tile:goLeft()
-    if not isTaken(self.xPos - 100, self.yPos) then
-        self.xPos = self.xPos - 100
+    if not isTaken(self.i - 1, self.j) then
+        self.i = self.i - 1
     end
 end
 
@@ -91,26 +90,20 @@ function Tile:goBottom()
 end
 
 function Tile:die()
-    if self.xPos == 210 and self.yPos == 0 then
+    if self.i == 3 and self.j == 8 then
         gameState = 'over'
         return
     end
 
-    si = posToSlotIndex(self.xPos, self.yPos)
-    i = si['i']
-    j = si['j']
-
-    self.active = false
-    deadTilesGrid[i][j] = self
 
     -- check placement validity
     srl = getSlotRestrictionList()
-    restr = srl[i]
+    restr = srl[self.i]
     edges = self:getEdges()
     valid = true
     for i = 1, 3 do
-        if not (restr:sub(i,i) == '-') then
-            if not (restr:sub(i,i) == edges:sub(i,i)) then
+        if restr:sub(i,i) ~= '-' then
+            if restr:sub(i,i) ~= edges:sub(i,i) then
                 valid = false
             end
         end
@@ -120,57 +113,34 @@ function Tile:die()
         return
     end
 
+    -- place tile
+    self.active = false
+    deadTilesGrid[self.i][self.j] = self
+
     -- increase score
     score = score + speed
-
-    -- update slotRestrictions
-    -- self
-    slotRestrictions[i][j] = 'xxx'
-    -- left neighbour
-    if i > 1 and not (slotRestrictions[i-1][j] == 'xxx') then
-        pre = slotRestrictions[i-1][j]
-        ins = edges:sub(1,1)
-        slotRestrictions[i-1][j] = pre:sub(1,2) .. ins
-    end
-    -- right neighbour
-    if i < 5 and not (slotRestrictions[i+1][j] == 'xxx') then
-        pre = slotRestrictions[i+1][j]
-        ins = edges:sub(3,3)
-        slotRestrictions[i+1][j] = ins .. pre:sub(2,3)
-    end
-    -- top neighbour
-    if j < 8 then
-        pre = slotRestrictions[i][j+1]
-        ins = edges:sub(4,4)
-        slotRestrictions[i][j+1] = pre:sub(1,1) .. ins .. pre:sub(3,3)
-    end
-    -- printSlotRestrictions()
 
     clearRows()
     spawnNewTile()
 end
 
 function clearRows()
-    rowDone = true
     for i = 1, 5 do
-        if not (slotRestrictions[i][2] == 'xxx') then
-            rowDone = false
+        if deadTilesGrid[i][2] == nil then
+            return
         end
     end
-    if rowDone then
-        score = score + (10 * speed)
-        for i = 1, 5 do
-            for j = 2, 8 do
-                tile = deadTilesGrid[i][j]
-                if not (tile == nil) then
-                    tile.yPos = tile.yPos + 100
-                end
+
+    score = score + (10 * speed)
+    for i = 1, 5 do
+        for j = 2, 8 do
+            tile = deadTilesGrid[i][j]
+            if tile ~= nil then
+                tile.j = tile.j - 1
             end
-            table.remove(slotRestrictions[i], 1)
-            table.remove(deadTilesGrid[i], 1)
-            slotRestrictions[i][8] = '---'
-            deadTilesGrid[i][8] = nil
         end
+        table.remove(deadTilesGrid[i], 1)
+        deadTilesGrid[i][8] = nil
     end
 end
 
@@ -179,8 +149,26 @@ function getSlotRestrictionList()
     for i = 1, 5 do
         done = false
         for j = 1, 8 do
-            if not (slotRestrictions[i][j] == 'xxx')  and not done then
-                table.insert(ret, slotRestrictions[i][j])
+            if deadTilesGrid[i][j] == nil and not done then
+                -- left
+                if i == 1 or deadTilesGrid[i-1][j] == nil then
+                    l = '-'
+                else
+                    l = deadTilesGrid[i-1][j]:getRight()
+                end
+                -- bottom
+                if j == 1 or deadTilesGrid[i][j-1] == nil then
+                    b = '-'
+                else
+                    b = deadTilesGrid[i][j-1]:getTop()
+                end
+                -- right
+                if i == 5 or deadTilesGrid[i+1][j] == nil then
+                    r = '-'
+                else
+                    r = deadTilesGrid[i+1][j]:getLeft()
+                end
+                table.insert(ret, l .. b .. r)
                 done = true
             end
         end
@@ -188,15 +176,15 @@ function getSlotRestrictionList()
     return ret
 end
 
-function isTaken(x, y)
-    if x < 10 or x > 410 or y > 700 then
+function isTaken(i, j)
+    if i < 1 or i > 5 or j < 1 then
         return true
     end
-    for i = 1, 5 do
-        for j = 1, 8 do
-            tile = deadTilesGrid[i][j]
-            if not (tile == nil) then
-                if tile.xPos == x and tile.yPos == y then
+    for idx = 1, 5 do
+        for jdx = 1, 8 do
+            tile = deadTilesGrid[idx][jdx]
+            if tile ~= nil then
+                if tile.i == i and tile.j == j then
                     return true
                 end
             end
@@ -229,24 +217,11 @@ function spawnNewTile(srl)
     activeTile = Tile:new(placeableTileIDs[math.random(lim)])
 end
 
-function posToSlotIndex(x, y)
+function gridToPixelPos(i, j)
     ret = {}
-    ret['i'] = ((x - 10) / 100) + 1
-    ret['j'] = ((700 - y) / 100) + 1
+    ret['x'] = ((i - 1) * 100) + 10
+    ret['y'] = 700 - ((j - 1) * 100)
     return ret
-end
-
-function printSlotRestrictions()
-    print('')
-    for j = 1, 8 do
-        s = ''
-        for i = 1, 5 do
-            s = s .. '[' .. slotRestrictions[i][9-j] .. '] '
-        end
-        print(s)
-    print('')
-    end
-    print('')
 end
 
 -- ### global
@@ -276,13 +251,10 @@ tileEdges = {a ='gggg',
              w ='rrrg',
              x ='rrrr'}
 deadTilesGrid = {}
-slotRestrictions = {}
 for i = 1, 5 do
     deadTilesGrid[i] = {}
-    slotRestrictions[i] = {}
     for j = 1, 8 do
         deadTilesGrid[i][j] = nil
-        slotRestrictions[i][j] = '---'
     end
 end
 speed = 1
@@ -327,7 +299,7 @@ function love.draw()
     activeTile:draw()
     for i = 1, 5 do
         for j = 1, 8 do
-            if not (deadTilesGrid[i][j] == nil) then
+            if deadTilesGrid[i][j] ~= nil then
                 deadTilesGrid[i][j]:draw()
             end
         end
@@ -346,7 +318,7 @@ function love.draw()
 end
 
 function love.keypressed(key, scancode)
-    if scancode ~= nil then
+    if scancode ~= nil and gameState == 'running' then
         if scancode == 'up' then
             activeTile:rotate()
         elseif scancode == 'down' then
@@ -357,9 +329,12 @@ function love.keypressed(key, scancode)
             activeTile:goLeft()
         elseif scancode == 'space' then
             activeTile:goBottom()
-        elseif scancode == 'p' then
+        end
+        if scancode == 'p' then
             if gameState == 'running' then
                 gameState = 'paused'
+            elseif gameState == 'paused' then
+                gameState = 'running'
             end
         end
     end
