@@ -2,7 +2,7 @@
 
 Tetris but with Carcassonne tiles.
 
-<img src="doc/game_play.png" with="400px"> <img src="doc/game_over.png" with="400px">
+<img src="doc/game_play.png" width="400px"> <img src="doc/game_over.png" width="400px">
 
 ## Requirements
 
