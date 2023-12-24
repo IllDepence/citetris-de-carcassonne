@@ -138,6 +138,30 @@ function Tile:die()
     spawnNewTile()
 end
 
+GridCoordBag = {}
+
+function GridCoordBag:new()
+    o = {}
+    setmetatable(o, {__index = GridCoordBag})
+    o.bag = {}
+    return o
+end
+
+function GridCoordBag:insert(ic, jc)
+    coord = {i=ic, j=jc}
+    table.insert(self.bag, coord)
+end
+
+function GridCoordBag:contains(ic, jc)
+    ret = false
+    for k, coord in pairs(self.bag) do
+        if coord.i == ic and coord.j == jc then
+            ret = true
+        end
+    end
+    return ret
+end
+
 function monasteryPoints(tile)
     points = 0
     for d = -1, 1 do
@@ -171,7 +195,77 @@ function monasteryPoints(tile)
 end
 
 function roadPoints(tile)
+    if string.match(roadEndTiles, tile.id) or
+            string.match(roadConnectorTiles, tile.id) then
+        visited = GridCoordBag:new()
+        if string.match(roadEndTiles, tile.id) then
+            ends = 1
+        else
+            ends = 0
+        end
+        if string.match(roadConnectorTiles, tile.id) then
+            loop = true
+        else
+            loop = false
+        end
+        ret = addUpRoads(tile, visited, ends, loop)
+        print (ret .. ' road points!! :)\n')
+        return ret
+    end
     return 0
+end
+
+function addUpRoads(tile, visited, ends, loop)
+    print('>> ' .. table.getn(visited))
+    i = tile.i
+    j = tile.j
+    visited:insert(i, j)
+    dirDeltas = {{-1,0},{0,-1},{1,0},{0,1}}
+    p = 1 -- point for tile itself
+    for k, d in pairs(dirDeltas) do
+        iDel = d[1]
+        jDel = d[2]
+        row = deadTilesGrid[i + iDel]
+        if row ~= nil then              -- make sure
+            neighbour = row[j + jDel]   -- not to
+            if neighbour ~= nil then    -- index nil
+                -- how do we connect to our neighbour?
+                if iDel == -1 and jDel == 0 then
+                    print('left')
+                    neighCon = tile:getLeft()
+                elseif iDel == 0 and jDel == -1 then
+                    print('down')
+                    neighCon = tile:getBottom()
+                elseif iDel == 1 and jDel == 0 then
+                    print('right')
+                    neighCon = tile:getRight()
+                else
+                    print('up')
+                    neighCon = tile:getTop()
+                end
+                if neighCon == 'r' then
+                    if string.match(roadEndTiles, neighbour.id) or
+                        visited:contains(neighbour.i, neighbour.j) then
+                        print('end or visited. +1')
+                        if string.match(roadEndTiles, neighbour.id) then
+                            ends = ends + 1
+                            loop = false
+                        end
+                        p = p + 1 -- add one for the exit/loop ahead? TODO
+                    else
+                        print('going deeper')
+                        p = p + addUpRoads(neighbour, visited, ends, loop)
+                    end
+                end
+            end
+        end
+    end
+    return p
+    -- if ends == 2 or loop == false then
+    --     return p
+    -- else
+    --     return 0
+    -- end
 end
 
 function cityPoints(tile)
@@ -304,6 +398,8 @@ tileEdges = {a ='gggg',
              v ='rrgg',
              w ='rrrg',
              x ='rrrr'}
+roadConnectorTiles = 'djkouvp'
+roadEndTiles = 'blstwv'
 deadTilesGrid = {}
 for i = 1, 5 do
     deadTilesGrid[i] = {}
@@ -403,6 +499,7 @@ function love.keypressed(key, scancode)
             for k, restr in pairs(srl) do
                 s = s .. '[' .. restr .. '] '
             end
+            s = s .. '\n ->' .. activeTile:getEdges()
             print(s)
         end
     end
